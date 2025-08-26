@@ -16,11 +16,11 @@ const CSV_COLUMNS = {
   'Sku Id': 'sku_id',
   'Description': 'description',
   'Selling Price': 'selling_price',
-  'MRP': 'billing_price_mrp',
+  'MRP': 'mrp',
   'Cost Price': 'cost_price',
   'Quantity': 'quantity',
   'Packaging Length (in cm)': 'packaging_length',
-  'Packaging Breadth (in cm)': 'packaging_width',
+  'Packaging Breadth (in cm)': 'packaging_breadth',
   'Packaging Height (in cm)': 'packaging_height',
   'Packaging Weight (in kg)': 'packaging_weight',
   'GST %': 'gst_percentage',
@@ -42,9 +42,9 @@ const CSV_COLUMNS = {
   'Return/Exchange Condition': 'return_exchange_condition',
   'HSN Code': 'hsn_code',
   'Customisation Id': 'customisation_id',
-  'Category Name': 'category_name',
-  'Sub Category Name': 'sub_category_name',
-  'Store Name': 'store_name'
+  'Category ID': 'category_id',
+  'Sub Category ID': 'sub_category_id',
+  'Store ID': 'store_id'
 };
 
 // Validation functions
@@ -192,6 +192,10 @@ const bulkImportProducts = async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
+    console.log('🚀 Bulk import started');
+    console.log('📁 Request file:', req.file);
+    console.log('📋 Request body:', req.body);
+    
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -201,6 +205,8 @@ const bulkImportProducts = async (req, res) => {
 
     const { upsertMode = 'upsert' } = req.body; // 'skip' or 'upsert'
     const filePath = req.file.path;
+    console.log('📂 File path:', filePath);
+    console.log('📄 File exists:', fs.existsSync(filePath));
     
     const results = {
       total: 0,
@@ -214,130 +220,154 @@ const bulkImportProducts = async (req, res) => {
     const products = [];
     const failedRows = [];
 
-    // Parse CSV file
-    return new Promise((resolve, reject) => {
+    // Parse CSV file synchronously using a Promise-based approach
+    const csvData = await new Promise((resolve, reject) => {
+      const rows = [];
       fs.createReadStream(filePath)
         .pipe(csv())
-        .on('data', async (row) => {
-          results.total++;
-          
-          try {
-            // Validate required fields
-            const name = validateRequired(row['Name'], 'Name');
-            const skuId = validateRequired(row['Sku Id'], 'Sku Id');
-            const categoryName = validateRequired(row['Category Name'], 'Category Name');
-            const storeName = validateRequired(row['Store Name'], 'Store Name');
-            
-            // Find IDs by names
-            const categoryId = await findCategoryByName(categoryName);
-            const storeId = await findStoreByName(storeName);
-            const subCategoryId = row['Sub Category Name'] ? 
-              await findSubCategoryByName(row['Sub Category Name'], categoryId) : null;
-            
-            // Check for duplicate SKU (only if upsert mode is 'skip')
-            let existingProduct = null;
-            if (upsertMode === 'skip') {
-              existingProduct = await Product.findOne({ 
-                where: { sku_id: skuId },
-                transaction 
-              });
+        .on('data', (row) => rows.push(row))
+        .on('end', () => resolve(rows))
+        .on('error', reject);
+    });
+    
+    console.log(`📊 Parsed ${csvData.length} rows from CSV`);
+    
+    // Process each row
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      results.total++;
+      
+      try {
+        console.log(`🔄 Processing row ${i + 1}:`, row);
+        
+        // Validate required fields
+        const name = validateRequired(row['Name'], 'Name');
+        console.log('✅ Name validated:', name);
+        
+        const skuId = validateRequired(row['Sku Id'], 'Sku Id');
+        console.log('✅ SKU validated:', skuId);
+        
+        const categoryId = validateRequired(row['Category ID'], 'Category ID');
+        console.log('✅ Category ID validated:', categoryId);
+        
+        const storeId = validateRequired(row['Store ID'], 'Store ID');
+        console.log('✅ Store ID validated:', storeId);
+        
+        // Use IDs directly (no need to lookup by name)
+        const subCategoryId = row['Sub Category ID'] ? parseInt(row['Sub Category ID']) : null;
+        console.log('✅ SubCategory ID:', subCategoryId);
+        
+        // Check for duplicate SKU (only if upsert mode is 'skip')
+        let existingProduct = null;
+        if (upsertMode === 'skip') {
+          existingProduct = await Product.findOne({ 
+            where: { sku_id: skuId },
+            transaction 
+          });
 
-              if (existingProduct) {
-                results.duplicates++;
-                failedRows.push({
-                  row: results.total,
-                  sku: skuId,
-                  error: 'SKU already exists (skip mode)',
-                  data: row
-                });
-                return;
-              }
-            }
-
-            // Process and validate data
-            const productData = {
-              name,
-              sku_id: skuId,
-              product_code: row['Product Code'] || null,
-              amazon_asin: row['Amazon ASIN'] || null,
-              description: row['Description'] || null,
-              selling_price: validateNumeric(row['Selling Price'], 'Selling Price'),
-              billing_price_mrp: validateNumeric(row['MRP'], 'MRP'),
-              cost_price: validateNumeric(row['Cost Price'], 'Cost Price'),
-              gst_percentage: validateNumeric(row['GST %'], 'GST %'),
-              hsn_code: row['HSN Code'] || null,
-              product_type: row['Product Type'] || null,
-              size: row['Size'] || null,
-              colour: row['Colour'] || null,
-              return_exchange_condition: row['Return/Exchange Condition'] || null,
-              customisation_id: row['Customisation Id'] || null,
-              category_id: categoryId,
-              sub_category_id: subCategoryId,
-              store_id: storeId,
-              slug: generateSlug(name),
-              is_active: true,
-              is_featured: false
-            };
-
-            // Process media
-            const media = processMediaUrls(row);
-            if (media.images.length > 0) {
-              productData.images = media.images.join(',');
-            }
-            if (media.videos.length > 0) {
-              productData.videos = media.videos.join(',');
-            }
-
-            // Create or update product
-            let product;
-            if (existingProduct && upsertMode === 'upsert') {
-              product = await existingProduct.update(productData, { transaction });
-              results.upserts++;
-            } else {
-              // Always create new product if not in strict mode
-              product = await Product.create(productData, { transaction });
-              results.success++;
-            }
-
-            products.push(product);
-
-          } catch (error) {
-            results.failed++;
+          if (existingProduct) {
+            results.duplicates++;
             failedRows.push({
               row: results.total,
-              sku: row['Sku Id'] || 'N/A',
-              error: error.message,
+              sku: skuId,
+              error: 'SKU already exists (skip mode)',
               data: row
             });
-            results.errors.push({
-              row: results.total,
-              sku: row['Sku Id'] || 'N/A',
-              error: error.message
-            });
+            continue;
           }
-        })
-        .on('end', async () => {
-          try {
-            await transaction.commit();
-            
-            // Clean up uploaded file
-            fs.unlinkSync(filePath);
-            
-            res.json({
-              success: true,
-              message: 'Bulk import completed',
-              results,
-              failedRows
-            });
-          } catch (error) {
-            await transaction.rollback();
-            reject(error);
+        }
+
+        // Process and validate data
+        const productData = {
+          name,
+          sku_id: skuId,
+          product_code: row['Product Code'] || null,
+          amazon_asin: row['Amazon ASIN'] || null,
+          description: row['Description'] || null,
+          selling_price: validateNumeric(row['Selling Price'], 'Selling Price'),
+          mrp: validateNumeric(row['MRP'], 'MRP'),
+          cost_price: validateNumeric(row['Cost Price'], 'Cost Price'),
+          quantity: parseInt(row['Quantity']) || 0,
+          packaging_length: validateNumeric(row['Packaging Length (in cm)'], 'Packaging Length'),
+          packaging_breadth: validateNumeric(row['Packaging Breadth (in cm)'], 'Packaging Breadth'),
+          packaging_height: validateNumeric(row['Packaging Height (in cm)'], 'Packaging Height'),
+          packaging_weight: validateNumeric(row['Packaging Weight (in kg)'], 'Packaging Weight'),
+          gst_percentage: validateNumeric(row['GST %'], 'GST %'),
+          image_1: row['Image 1'] || null,
+          image_2: row['Image 2'] || null,
+          image_3: row['Image 3'] || null,
+          image_4: row['Image 4'] || null,
+          image_5: row['Image 5'] || null,
+          image_6: row['Image 6'] || null,
+          image_7: row['Image 7'] || null,
+          image_8: row['Image 8'] || null,
+          image_9: row['Image 9'] || null,
+          image_10: row['Image 10'] || null,
+          video_1: row['Video 1'] || null,
+          video_2: row['Video 2'] || null,
+          product_type: row['Product Type'] || null,
+          size: row['Size'] || null,
+          colour: row['Colour'] || null,
+          return_exchange_condition: row['Return/Exchange Condition'] || null,
+          hsn_code: row['HSN Code'] || null,
+          customisation_id: row['Customisation Id'] || null,
+          category_id: parseInt(categoryId),
+          sub_category_id: subCategoryId,
+          store_id: storeId,
+          slug: generateSlug(name),
+          is_active: true,
+          is_featured: false
+        };
+
+        // Media is now handled directly in productData fields
+
+        // Create or update product
+        let product;
+        try {
+          if (existingProduct && upsertMode === 'upsert') {
+            product = await existingProduct.update(productData, { transaction });
+            results.upserts++;
+          } else {
+            // Always create new product if not in strict mode
+            console.log('🔄 Creating product with data:', JSON.stringify(productData, null, 2));
+            product = await Product.create(productData, { transaction });
+            results.success++;
+            console.log('✅ Product created successfully:', product.id);
           }
-        })
-        .on('error', async (error) => {
-          await transaction.rollback();
-          reject(error);
+
+          products.push(product);
+        } catch (createError) {
+          console.error('❌ Product creation error:', createError.message);
+          throw createError;
+        }
+
+      } catch (error) {
+        results.failed++;
+        failedRows.push({
+          row: results.total,
+          sku: row['Sku Id'] || 'N/A',
+          error: error.message,
+          data: row
         });
+        results.errors.push({
+          row: results.total,
+          sku: row['Sku Id'] || 'N/A',
+          error: error.message
+        });
+      }
+    }
+    
+    // Commit transaction after all rows are processed
+    await transaction.commit();
+    
+    // Clean up uploaded file
+    fs.unlinkSync(filePath);
+    
+    res.json({
+      success: true,
+      message: 'Bulk import completed',
+      results,
+      failedRows
     });
 
   } catch (error) {

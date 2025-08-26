@@ -94,6 +94,7 @@ const SubCategorySetup: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    console.log(" test");
     
     try {
       if (editingSubCategory) {
@@ -119,6 +120,7 @@ const SubCategorySetup: React.FC = () => {
         }
       } else {
         // Create new sub category
+        console.log(" test 2");
         const response = await fetch('http://localhost:5000/api/subcategories', {
           method: 'POST',
           headers: {
@@ -133,9 +135,10 @@ const SubCategorySetup: React.FC = () => {
         });
 
         if (response.ok) {
-          await fetchSubCategories(); // Refresh data
+          await fetchSubCategories(); 
         } else {
           alert('Failed to create sub category');
+          console.log(response);
           return;
         }
       }

@@ -223,13 +223,13 @@ const AdminLayout = () => {
                   <Package className="w-4 h-4 mr-3" />
                   Products
                 </Link>
-                <Link
+                {/* <Link
                   to="/admin/bulk-import"
                   className="flex items-center text-gray-300 hover:text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   <Upload className="w-4 h-4 mr-3" />
                   Bulk Import
-                </Link>
+                </Link> */}
               </div>
             )}
           </div>

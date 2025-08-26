@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '../../components/ui/toast';
 
 interface SubCategory {
   id: number;
@@ -30,6 +31,7 @@ interface SubCategoryFormData {
 }
 
 const SubCategorySetup: React.FC = () => {
+  const { addToast } = useToast();
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,10 +63,20 @@ const SubCategorySetup: React.FC = () => {
       } else {
         console.error('Failed to fetch categories');
         setCategories([]);
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to fetch categories'
+        });
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
       setCategories([]);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch categories'
+      });
     }
   };
 
@@ -73,14 +85,24 @@ const SubCategorySetup: React.FC = () => {
       const response = await fetch('http://localhost:5000/api/subcategories');
       if (response.ok) {
         const data = await response.json();
-        setSubCategories(data.data?.subcategories || []);
+        setSubCategories(data.data?.subCategories || []);
       } else {
         console.error('Failed to fetch subcategories');
         setSubCategories([]);
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to fetch subcategories'
+        });
       }
     } catch (error) {
       console.error('Error fetching subcategories:', error);
       setSubCategories([]);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch subcategories'
+      });
     }
   };
 
@@ -94,7 +116,6 @@ const SubCategorySetup: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log(" test");
     
     try {
       if (editingSubCategory) {
@@ -107,20 +128,30 @@ const SubCategorySetup: React.FC = () => {
           body: JSON.stringify({
             name: formData.name,
             priority: parseInt(formData.priority),
-            is_active: formData.isActive,
-            category_id: parseInt(formData.categoryId)
+            isActive: formData.isActive,
+            categoryId: parseInt(formData.categoryId)
           })
         });
 
         if (response.ok) {
+          const result = await response.json();
+          addToast({
+            type: 'success',
+            title: 'Success',
+            message: 'Sub category updated successfully'
+          });
           await fetchSubCategories(); // Refresh data
         } else {
-          alert('Failed to update sub category');
+          const errorData = await response.json();
+          addToast({
+            type: 'error',
+            title: 'Error',
+            message: errorData.message || 'Failed to update sub category'
+          });
           return;
         }
       } else {
         // Create new sub category
-        console.log(" test 2");
         const response = await fetch('http://localhost:5000/api/subcategories', {
           method: 'POST',
           headers: {
@@ -129,16 +160,26 @@ const SubCategorySetup: React.FC = () => {
           body: JSON.stringify({
             name: formData.name,
             priority: parseInt(formData.priority),
-            is_active: formData.isActive,
-            category_id: parseInt(formData.categoryId)
+            isActive: formData.isActive,
+            categoryId: parseInt(formData.categoryId)
           })
         });
 
         if (response.ok) {
-          await fetchSubCategories(); 
+          const result = await response.json();
+          addToast({
+            type: 'success',
+            title: 'Success',
+            message: 'Sub category created successfully'
+          });
+          await fetchSubCategories(); // Refresh data
         } else {
-          alert('Failed to create sub category');
-          console.log(response);
+          const errorData = await response.json();
+          addToast({
+            type: 'error',
+            title: 'Error',
+            message: errorData.message || 'Failed to create sub category'
+          });
           return;
         }
       }
@@ -154,7 +195,11 @@ const SubCategorySetup: React.FC = () => {
       
     } catch (error) {
       console.error('Error saving sub category:', error);
-      alert('Error saving sub category');
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Error saving sub category'
+      });
     } finally {
       setLoading(false);
     }
@@ -178,13 +223,27 @@ const SubCategorySetup: React.FC = () => {
         });
 
         if (response.ok) {
+          addToast({
+            type: 'success',
+            title: 'Success',
+            message: 'Sub category deleted successfully'
+          });
           await fetchSubCategories(); // Refresh data
         } else {
-          alert('Failed to delete sub category');
+          const errorData = await response.json();
+          addToast({
+            type: 'error',
+            title: 'Error',
+            message: errorData.message || 'Failed to delete sub category'
+          });
         }
       } catch (error) {
         console.error('Error deleting sub category:', error);
-        alert('Error deleting sub category');
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: 'Error deleting sub category'
+        });
       }
     }
   };

@@ -56,7 +56,7 @@ interface Product {
   custom_attributes: string;
   is_active: boolean;
   is_featured: boolean;
-  store_id: number;
+  store_id: string; // Changed from number to string to handle UUIDs
   category_id: number;
   sub_category_id: number;
   created_at?: string;
@@ -75,7 +75,7 @@ interface SubCategory {
 }
 
 interface Store {
-  id: number;
+  id: string; // Changed from number to string to handle UUIDs
   name: string;
 }
 
@@ -89,7 +89,7 @@ const Products: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | ''>('');
-  const [selectedStore, setSelectedStore] = useState<number | ''>('');
+  const [selectedStore, setSelectedStore] = useState<string | ''>(''); // Changed from number to string
   const [isLoading, setIsLoading] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -600,7 +600,7 @@ const Products: React.FC = () => {
               <select
                 id="store"
                 value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => setSelectedStore(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md"
               >
                 <option value="">All Stores</option>
@@ -827,10 +827,82 @@ const ProductModal: React.FC<ProductModalProps> = ({
     custom_attributes: '',
     is_active: true,
     is_featured: false,
-    store_id: 1,
-    category_id: 1,
-    sub_category_id: 1
+    store_id: '',
+    category_id: 0,
+    sub_category_id: 0
   });
+
+  // Reset form when creating new product
+  useEffect(() => {
+    if (!product) {
+      // Creating new product - reset form
+      console.log('Creating new product - resetting form');
+      setFormData({
+        product_code: '',
+        amazon_asin: '',
+        sku_id: '',
+        name: '',
+        description: '',
+        selling_price: 0,
+        mrp: 0,
+        cost_price: 0,
+        quantity: 0,
+        packaging_length: 0,
+        packaging_breadth: 0,
+        packaging_height: 0,
+        packaging_weight: 0,
+        gst_percentage: 0,
+        image_1: '',
+        image_2: '',
+        image_3: '',
+        image_4: '',
+        image_5: '',
+        image_6: '',
+        image_7: '',
+        image_8: '',
+        image_9: '',
+        image_10: '',
+        video_1: '',
+        video_2: '',
+        size_chart: '',
+        product_type: '',
+        size: '',
+        colour: '',
+        return_exchange_condition: '',
+        hsn_code: '',
+        custom_attributes: '',
+        is_active: true,
+        is_featured: false,
+        store_id: '',
+        category_id: 0,
+        sub_category_id: 0
+      });
+    }
+  }, [product]);
+
+  // Update form data when stores/categories change
+  useEffect(() => {
+    console.log('useEffect triggered - stores/categories changed');
+    console.log('Current stores:', stores);
+    console.log('Current categories:', categories);
+    console.log('Current subCategories:', subCategories);
+    console.log('Current formData:', formData);
+    
+    // Remove automatic store selection - let user choose
+    // if (stores.length > 0 && (!formData.store_id || formData.store_id === '')) {
+    //   console.log('Setting store_id to first store:', stores[0].id);
+    //   setFormData(prev => ({ ...prev, store_id: stores[0].id }));
+    // }
+    
+    if (categories.length > 0 && (!formData.category_id || formData.category_id === 0)) {
+      console.log('Setting category_id to first category:', categories[0].id);
+      setFormData(prev => ({ ...prev, category_id: categories[0].id }));
+    }
+    if (subCategories.length > 0 && (!formData.sub_category_id || formData.sub_category_id === 0)) {
+      console.log('Setting sub_category_id to first subcategory:', subCategories[0].id);
+      setFormData(prev => ({ ...prev, sub_category_id: subCategories[0].id }));
+    }
+  }, [stores, categories, subCategories]);
 
   useEffect(() => {
     if (product) {
@@ -841,14 +913,24 @@ const ProductModal: React.FC<ProductModalProps> = ({
       console.log('Product category_id:', product.category_id);
       console.log('Product sub_category_id:', product.sub_category_id);
       
-      setFormData(product);
+      // Ensure all required fields have valid values
+      const updatedProduct = {
+        ...product,
+        // Don't automatically set store_id - let user choose
+        // store_id: product.store_id || (stores.length > 0 ? stores[0].id : ''),
+        store_id: product.store_id || '',
+        category_id: product.category_id || (categories.length > 0 ? categories[0].id : 0),
+        sub_category_id: product.sub_category_id || (subCategories.length > 0 ? subCategories[0].id : 0)
+      };
+      
+      setFormData(updatedProduct);
       
       // Log the form data after setting
       setTimeout(() => {
         console.log('Form data after setting:', formData);
       }, 100);
     }
-  }, [product]);
+  }, [product, stores, categories, subCategories]);
 
   // Reset subcategory when category changes
   useEffect(() => {
@@ -861,11 +943,34 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.store_id || formData.store_id === '') {
+      alert('Please select a store');
+      return;
+    }
+    
+    if (!formData.category_id || formData.category_id === 0) {
+      alert('Please select a category');
+      return;
+    }
+    
+    if (!formData.sub_category_id || formData.sub_category_id === 0) {
+      alert('Please select a subcategory');
+      return;
+    }
+    
     onSave(formData);
   };
 
   const handleInputChange = (field: keyof Product, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    console.log(`handleInputChange called: field=${field}, value=${value}, type=${typeof value}`);
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      console.log(`Form data updated: ${field} = ${value}`);
+      console.log('New form data:', newData);
+      return newData;
+    });
   };
 
   return (
@@ -952,47 +1057,91 @@ const ProductModal: React.FC<ProductModalProps> = ({
                     <Label htmlFor="category_id">Category *</Label>
                     <select
                       id="category_id"
-                      value={formData.category_id}
-                      onChange={(e) => handleInputChange('category_id', Number(e.target.value))}
+                      value={formData.category_id || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Category selection changed:', value);
+                        handleInputChange('category_id', value ? Number(value) : 0);
+                      }}
                       className="w-full p-2 border border-gray-300 rounded-md"
                       required
+                      disabled={categories.length === 0}
                     >
-                      {categories.map(category => (
-                        <option key={category.id} value={category.id}>{category.name}</option>
-                      ))}
+                      {categories.length === 0 ? (
+                        <option value="">No categories available</option>
+                      ) : (
+                        <>
+                          <option value="">Select a category</option>
+                          {categories.map(category => (
+                            <option key={category.id} value={category.id}>{category.name}</option>
+                          ))}
+                        </>
+                      )}
                     </select>
+                    {categories.length === 0 && (
+                      <div className="text-xs text-red-600 mt-1">
+                        ⚠️ No categories available. Please create a category first.
+                      </div>
+                    )}
+                    {formData.category_id && (
+                      <div className="text-xs text-green-600 mt-1">
+                        ✓ Selected: {categories.find(c => c.id === formData.category_id)?.name}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="sub_category_id">Sub Category *</Label>
                     <select
                       id="sub_category_id"
-                      value={formData.sub_category_id}
-                      onChange={(e) => handleInputChange('sub_category_id', Number(e.target.value))}
+                      value={formData.sub_category_id || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Subcategory selection changed:', value);
+                        handleInputChange('sub_category_id', value ? Number(value) : 0);
+                      }}
                       className="w-full p-2 border border-gray-300 rounded-md"
                       required
+                      disabled={subCategories.length === 0 || !formData.category_id}
                     >
-                      <option value="">Select Sub Category</option>
-                      {/* Show subcategories for current category */}
-                      {subCategories
-                        .filter(sc => sc.category_id === formData.category_id)
-                        .map(subCategory => (
-                          <option key={subCategory.id} value={subCategory.id}>
-                            {subCategory.name}
-                          </option>
-                        ))}
-                      {/* Show current subcategory if it exists but doesn't match current category */}
-                      {formData.sub_category_id && 
-                       subCategories.find(sc => sc.id === formData.sub_category_id) && 
-                       subCategories.find(sc => sc.id === formData.sub_category_id)?.category_id !== formData.category_id && (
-                        <optgroup label="Current Subcategory (Different Category)">
-                          <option value={formData.sub_category_id}>
-                            {subCategories.find(sc => sc.id === formData.sub_category_id)?.name} 
-                            (Category: {categories.find(c => c.id === subCategories.find(sc => sc.id === formData.sub_category_id)?.category_id)?.name})
-                          </option>
-                        </optgroup>
+                      {subCategories.length === 0 ? (
+                        <option value="">No subcategories available</option>
+                      ) : !formData.category_id ? (
+                        <option value="">Select a category first</option>
+                      ) : (
+                        <>
+                          <option value="">Select a subcategory</option>
+                          {/* Show subcategories for current category */}
+                          {subCategories
+                            .filter(sc => sc.category_id === formData.category_id)
+                            .map(subCategory => (
+                              <option key={subCategory.id} value={subCategory.id}>
+                                {subCategory.name}
+                              </option>
+                            ))}
+                          {/* Show current subcategory if it exists but doesn't match current category */}
+                          {formData.sub_category_id && 
+                           subCategories.find(sc => sc.id === formData.sub_category_id) && 
+                           subCategories.find(sc => sc.id === formData.sub_category_id)?.category_id !== formData.category_id && (
+                            <optgroup label="Current Subcategory (Different Category)">
+                              <option value={formData.sub_category_id}>
+                                {subCategories.find(sc => sc.id === formData.sub_category_id)?.name} 
+                                (Category: {categories.find(c => c.id === subCategories.find(sc => sc.id === formData.sub_category_id)?.category_id)?.name})
+                              </option>
+                            </optgroup>
+                          )}
+                        </>
                       )}
                     </select>
-                    {/* Show warning if subcategory doesn't match category */}
+                    {subCategories.length === 0 && (
+                      <div className="text-xs text-red-600 mt-1">
+                        ⚠️ No subcategories available. Please create a subcategory first.
+                      </div>
+                    )}
+                    {formData.sub_category_id && (
+                      <div className="text-xs text-green-600 mt-1">
+                        ✓ Selected: {subCategories.find(sc => sc.id === formData.sub_category_id)?.name}
+                      </div>
+                    )}
                     {formData.sub_category_id && 
                      subCategories.find(sc => sc.id === formData.sub_category_id)?.category_id !== formData.category_id && (
                       <div className="text-xs text-orange-600 mt-1">
@@ -1004,15 +1153,37 @@ const ProductModal: React.FC<ProductModalProps> = ({
                     <Label htmlFor="store_id">Store *</Label>
                     <select
                       id="store_id"
-                      value={formData.store_id}
-                      onChange={(e) => handleInputChange('store_id', Number(e.target.value))}
+                      value={formData.store_id || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Store selection changed:', value);
+                        handleInputChange('store_id', value);
+                      }}
                       className="w-full p-2 border border-gray-300 rounded-md"
                       required
+                      disabled={stores.length === 0}
                     >
-                      {stores.map(store => (
-                        <option key={store.id} value={store.id}>{store.name}</option>
-                      ))}
+                      {stores.length === 0 ? (
+                        <option value="">No stores available</option>
+                      ) : (
+                        <>
+                          <option value="">Select a store</option>
+                          {stores.map(store => (
+                            <option key={store.id} value={store.id}>{store.name}</option>
+                          ))}
+                        </>
+                      )}
                     </select>
+                    {stores.length === 0 && (
+                      <div className="text-xs text-red-600 mt-1">
+                        ⚠️ No stores available. Please create a store first.
+                      </div>
+                    )}
+                    {formData.store_id && (
+                      <div className="text-xs text-green-600 mt-1">
+                        ✓ Selected: {stores.find(s => s.id === formData.store_id)?.name}
+                      </div>
+                    )}
                   </div>
                 </div>
               </TabsContent>
@@ -1184,300 +1355,302 @@ const ProductModal: React.FC<ProductModalProps> = ({
                  </div>
                </TabsContent>
 
-              {/* Advanced Tab */}
-              <TabsContent value="advanced" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="size">Size</Label>
-                    <Input
-                      id="size"
-                      value={formData.size}
-                      onChange={(e) => handleInputChange('size', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="colour">Colour</Label>
-                    <Input
-                      id="colour"
-                      value={formData.colour}
-                      onChange={(e) => handleInputChange('colour', e.target.value)}
-                    />
-                  </div>
-                </div>
+               {/* Advanced Tab */}
+               <TabsContent value="advanced" className="space-y-4">
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <Label htmlFor="size">Size</Label>
+                     <Input
+                       id="size"
+                       value={formData.size}
+                       onChange={(e) => handleInputChange('size', e.target.value)}
+                     />
+                   </div>
+                   <div>
+                     <Label htmlFor="colour">Colour</Label>
+                     <Input
+                       id="colour"
+                       value={formData.colour}
+                       onChange={(e) => handleInputChange('colour', e.target.value)}
+                     />
+                   </div>
+                 </div>
 
-                <div>
-                  <Label htmlFor="hsn_code">HSN Code</Label>
-                  <Input
-                    id="hsn_code"
-                    value={formData.hsn_code}
-                    onChange={(e) => handleInputChange('hsn_code', e.target.value)}
-                  />
-                </div>
+                 <div>
+                   <Label htmlFor="hsn_code">HSN Code</Label>
+                   <Input
+                     id="hsn_code"
+                     value={formData.hsn_code}
+                     onChange={(e) => handleInputChange('hsn_code', e.target.value)}
+                   />
+                 </div>
 
-                <div>
-                  <Label htmlFor="return_exchange_condition">Return & Exchange Policy</Label>
-                  <textarea
-                    id="return_exchange_condition"
-                    value={formData.return_exchange_condition}
-                    onChange={(e) => handleInputChange('return_exchange_condition', e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md h-20"
-                  />
-                </div>
+                 <div>
+                   <Label htmlFor="return_exchange_condition">Return & Exchange Policy</Label>
+                   <textarea
+                     id="return_exchange_condition"
+                     value={formData.return_exchange_condition}
+                     onChange={(e) => handleInputChange('return_exchange_condition', e.target.value)}
+                     className="w-full p-2 border border-gray-300 rounded-md h-20"
+                   />
+                 </div>
 
-                <div>
-                  <Label htmlFor="custom_attributes">Custom Attributes</Label>
-                  <textarea
-                    id="custom_attributes"
-                    value={formData.custom_attributes}
-                    onChange={(e) => handleInputChange('custom_attributes', e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md h-20"
-                    placeholder="Enter custom attributes in JSON format or key-value pairs"
-                  />
-                </div>
+                 <div>
+                   <Label htmlFor="custom_attributes">Custom Attributes</Label>
+                   <textarea
+                     id="custom_attributes"
+                     value={formData.custom_attributes}
+                     onChange={(e) => handleInputChange('custom_attributes', e.target.value)}
+                     className="w-full p-2 border border-gray-300 rounded-md h-20"
+                     placeholder="Enter custom attributes in JSON format or key-value pairs"
+                   />
+                 </div>
 
-                <div className="flex space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="is_active"
-                      checked={formData.is_active}
-                      onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                    />
-                    <Label htmlFor="is_active">Active</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="is_featured"
-                      checked={formData.is_featured}
-                      onChange={(e) => handleInputChange('is_featured', e.target.checked)}
-                    />
-                    <Label htmlFor="is_featured">Featured</Label>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+                 <div className="flex space-x-4">
+                   <div className="flex items-center space-x-2">
+                     <input
+                       type="checkbox"
+                       id="is_active"
+                       checked={formData.is_active}
+                       onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                     />
+                     <Label htmlFor="is_active">Active</Label>
+                   </div>
+                   <div className="flex items-center space-x-2">
+                     <input
+                       type="checkbox"
+                       id="is_featured"
+                       checked={formData.is_featured}
+                       onChange={(e) => handleInputChange('is_featured', e.target.checked)}
+                     />
+                     <Label htmlFor="is_featured">Featured</Label>
+                   </div>
+                 </div>
+               </TabsContent>
+             </Tabs>
 
-            <div className="flex justify-end space-x-3 pt-6 border-t">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  console.log('=== FORM DEBUG ===');
-                  console.log('Current formData:', formData);
-                  console.log('Available categories:', categories);
-                  console.log('Available subcategories:', subCategories);
-                  console.log('Selected category_id:', formData.category_id);
-                  console.log('Selected sub_category_id:', formData.sub_category_id);
-                  alert(`Form Debug:\nCategory: ${formData.category_id}\nSubcategory: ${formData.sub_category_id}\nCheck console for details`);
-                }}
-              >
-                Debug Form
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                {product ? 'Update Product' : 'Create Product'}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
+             <div className="flex justify-end space-x-3 pt-6 border-t">
+               <Button 
+                 type="button" 
+                 variant="outline" 
+                 onClick={() => {
+                   console.log('=== FORM DEBUG ===');
+                   console.log('Current formData:', formData);
+                   console.log('Available stores:', stores);
+                   console.log('Available categories:', categories);
+                   console.log('Available subcategories:', subCategories);
+                   console.log('Selected store_id:', formData.store_id);
+                   console.log('Selected category_id:', formData.category_id);
+                   console.log('Selected sub_category_id:', formData.sub_category_id);
+                   alert(`Form Debug:\nStore: ${formData.store_id} (${stores.find(s => s.id === formData.store_id)?.name || 'Not found'})\nCategory: ${formData.category_id} (${categories.find(c => c.id === formData.category_id)?.name || 'Not found'})\nSubcategory: ${formData.sub_category_id} (${subCategories.find(sc => sc.id === formData.sub_category_id)?.name || 'Not found'})\nCheck console for details`);
+                 }}
+               >
+                 Debug Form
+               </Button>
+               <Button type="button" variant="outline" onClick={onClose}>
+                 Cancel
+               </Button>
+               <Button type="submit">
+                 {product ? 'Update Product' : 'Create Product'}
+               </Button>
+             </div>
+           </form>
+         </div>
+       </div>
+     </div>
+   );
+ };
 
-// CSV Upload Modal Component
-interface CsvUploadModalProps {
-  onUpload: () => void;
-  onClose: () => void;
-  isLoading: boolean;
-  progress: number;
-  csvFile: File | null;
-  onFileSelect: (file: File | null) => void;
-  onDownloadTemplate: () => void;
-}
+ // CSV Upload Modal Component
+ interface CsvUploadModalProps {
+   onUpload: () => void;
+   onClose: () => void;
+   isLoading: boolean;
+   progress: number;
+   csvFile: File | null;
+   onFileSelect: (file: File | null) => void;
+   onDownloadTemplate: () => void;
+ }
 
-const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
-  onUpload,
-  onClose,
-  isLoading,
-  progress,
-  csvFile,
-  onFileSelect,
-  onDownloadTemplate
-}) => {
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+ const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
+   onUpload,
+   onClose,
+   isLoading,
+   progress,
+   csvFile,
+   onFileSelect,
+   onDownloadTemplate
+ }) => {
+   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    console.log('File input change detected:', file);
-    
-    if (file) {
-      console.log('File details:', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: file.lastModified
-      });
-      
-      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-        console.log('Valid CSV file detected, calling onFileSelect');
-        onFileSelect(file);
-      } else {
-        console.log('Invalid file type, showing error');
-        alert('Please select a valid CSV file (.csv extension)');
-        onFileSelect(null);
-        // Reset the file input
-        e.target.value = '';
-      }
-    } else {
-      console.log('No file selected, clearing selection');
-      onFileSelect(null);
-    }
-  };
+   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const file = e.target.files?.[0];
+     console.log('File input change detected:', file);
+     
+     if (file) {
+       console.log('File details:', {
+         name: file.name,
+         size: file.size,
+         type: file.type,
+         lastModified: file.lastModified
+       });
+       
+       if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+         console.log('Valid CSV file detected, calling onFileSelect');
+         onFileSelect(file);
+       } else {
+         console.log('Invalid file type, showing error');
+         alert('Please select a valid CSV file (.csv extension)');
+         onFileSelect(null);
+         // Reset the file input
+         e.target.value = '';
+       }
+     } else {
+       console.log('No file selected, clearing selection');
+       onFileSelect(null);
+     }
+   };
 
-  const resetFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      console.log('File input reset via ref');
-    }
-  };
+   const resetFileInput = () => {
+     if (fileInputRef.current) {
+       fileInputRef.current.value = '';
+       console.log('File input reset via ref');
+     }
+   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">Bulk Upload Products</h2>
-            <Button variant="ghost" onClick={onClose}>✕</Button>
-          </div>
+   return (
+     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+       <div className="bg-white rounded-lg w-full max-w-2xl">
+         <div className="p-6">
+           <div className="flex justify-between items-center mb-6">
+             <h2 className="text-2xl font-bold">Bulk Upload Products</h2>
+             <Button variant="ghost" onClick={onClose}>✕</Button>
+           </div>
 
-          <div className="space-y-6">
-            <div>
-              <Label htmlFor="csv-file">Select CSV File</Label>
-              <div className="mt-2">
-                <Input
-                  ref={fileInputRef}
-                  id="csv-file"
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  disabled={isLoading}
-                />
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Maximum file size: 50MB. Supports up to 50,000 products.
-              </p>
-            </div>
+           <div className="space-y-6">
+             <div>
+               <Label htmlFor="csv-file">Select CSV File</Label>
+               <div className="mt-2">
+                 <Input
+                   ref={fileInputRef}
+                   id="csv-file"
+                   type="file"
+                   accept=".csv"
+                   onChange={handleFileChange}
+                   disabled={isLoading}
+                 />
+               </div>
+               <p className="text-sm text-gray-500 mt-1">
+                 Maximum file size: 50MB. Supports up to 50,000 products.
+               </p>
+             </div>
 
-            {csvFile && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <FileText className="w-5 h-5 text-blue-500" />
-                  <span className="font-medium">{csvFile.name}</span>
-                  <span className="text-sm text-gray-500">
-                    ({(csvFile.size / 1024 / 1024).toFixed(2)} MB)
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  File selected successfully - Ready to upload
-                </div>
-              </div>
-            )}
+             {csvFile && (
+               <div className="p-4 bg-gray-50 rounded-lg">
+                 <div className="flex items-center space-x-2">
+                   <FileText className="w-5 h-5 text-blue-500" />
+                   <span className="font-medium">{csvFile.name}</span>
+                   <span className="text-sm text-gray-500">
+                     ({(csvFile.size / 1024 / 1024).toFixed(2)} MB)
+                   </span>
+                 </div>
+                 <div className="text-xs text-gray-500 mt-1">
+                   File selected successfully - Ready to upload
+                 </div>
+               </div>
+             )}
 
-            {!csvFile && (
-              <div className="p-4 bg-yellow-50 rounded-lg">
-                <div className="text-sm text-yellow-800">
-                  ⚠️ No file selected. Please choose a CSV file to upload.
-                </div>
-              </div>
-            )}
+             {!csvFile && (
+               <div className="p-4 bg-yellow-50 rounded-lg">
+                 <div className="text-sm text-yellow-800">
+                   ⚠️ No file selected. Please choose a CSV file to upload.
+                 </div>
+               </div>
+             )}
 
-            {isLoading && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Processing...</span>
-                  <span>{progress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-            )}
+             {isLoading && (
+               <div className="space-y-2">
+                 <div className="flex justify-between text-sm">
+                   <span>Processing...</span>
+                   <span>{progress}%</span>
+                 </div>
+                 <div className="w-full bg-gray-200 rounded-full h-2">
+                   <div
+                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                     style={{ width: `${progress}%` }}
+                   />
+                 </div>
+               </div>
+             )}
 
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-2">CSV Format Requirements:</h3>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Product Code, ASIN, SKU ID, Product Name (required)</li>
-                <li>• Selling Price, MRP, Cost Price, Quantity (required)</li>
-                <li>• Category ID, Sub Category ID, Store ID (required)</li>
-                <li>• Images, Videos, Dimensions, GST, HSN Code (optional)</li>
-                <li>• Download sample CSV template for reference</li>
-              </ul>
-            </div>
+             <div className="bg-blue-50 p-4 rounded-lg">
+               <h3 className="font-medium text-blue-900 mb-2">CSV Format Requirements:</h3>
+               <ul className="text-sm text-blue-800 space-y-1">
+                 <li>• Product Code, ASIN, SKU ID, Product Name (required)</li>
+                 <li>• Selling Price, MRP, Cost Price, Quantity (required)</li>
+                 <li>• Category ID, Sub Category ID, Store ID (required)</li>
+                 <li>• Images, Videos, Dimensions, GST, HSN Code (optional)</li>
+                 <li>• Download sample CSV template for reference</li>
+               </ul>
+             </div>
 
-            <div className="flex justify-between items-center">
-              <Button variant="outline" onClick={onDownloadTemplate}>
-                <Download className="w-4 h-4 mr-2" />
-                Download Template
-              </Button>
-              <div className="flex space-x-3">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    console.log('=== DEBUG BUTTON CLICKED ===');
-                    console.log('Current csvFile state:', csvFile);
-                    console.log('Current isLoading state:', isLoading);
-                    console.log('File input element:', document.getElementById('csv-file'));
-                    alert(`File: ${csvFile ? csvFile.name : 'None'}\nSize: ${csvFile ? csvFile.size : 'N/A'} bytes\nLoading: ${isLoading}`);
-                  }}
-                >
-                  Debug
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    console.log('=== TEST FILE SELECTION ===');
-                    // Create a test file object
-                    const testFile = new File(['test content'], 'test.csv', { type: 'text/csv' });
-                    console.log('Test file created:', testFile);
-                    onFileSelect(testFile);
-                  }}
-                >
-                  Test File
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    console.log('=== RESET FILE SELECTION ===');
-                    onFileSelect(null);
-                    resetFileInput();
-                  }}
-                >
-                  Reset
-                </Button>
-                <Button variant="outline" onClick={onClose}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={onUpload}
-                  disabled={!csvFile || isLoading}
-                  className="min-w-[100px]"
-                >
-                  {isLoading ? 'Processing...' : 'Upload'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+             <div className="flex justify-between items-center">
+               <Button variant="outline" onClick={onDownloadTemplate}>
+                 <Download className="w-4 h-4 mr-2" />
+                 Download Template
+               </Button>
+               <div className="flex space-x-3">
+                 <Button 
+                   variant="outline" 
+                   onClick={() => {
+                     console.log('=== DEBUG BUTTON CLICKED ===');
+                     console.log('Current csvFile state:', csvFile);
+                     console.log('Current isLoading state:', isLoading);
+                     console.log('File input element:', document.getElementById('csv-file'));
+                     alert(`File: ${csvFile ? csvFile.name : 'None'}\nSize: ${csvFile ? csvFile.size : 'N/A'} bytes\nLoading: ${isLoading}`);
+                   }}
+                 >
+                   Debug
+                 </Button>
+                 <Button 
+                   variant="outline" 
+                   onClick={() => {
+                     console.log('=== TEST FILE SELECTION ===');
+                     // Create a test file object
+                     const testFile = new File(['test content'], 'test.csv', { type: 'text/csv' });
+                     console.log('Test file created:', testFile);
+                     onFileSelect(testFile);
+                   }}
+                 >
+                   Test File
+                 </Button>
+                 <Button 
+                   variant="outline" 
+                   onClick={() => {
+                     console.log('=== RESET FILE SELECTION ===');
+                     onFileSelect(null);
+                     resetFileInput();
+                   }}
+                 >
+                   Reset
+                 </Button>
+                 <Button variant="outline" onClick={onClose}>
+                   Cancel
+                 </Button>
+                 <Button
+                   onClick={onUpload}
+                   disabled={!csvFile || isLoading}
+                   className="min-w-[100px]"
+                 >
+                   {isLoading ? 'Processing...' : 'Upload'}
+                 </Button>
+               </div>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+   );
+ };
 
-export default Products;
+ export default Products;

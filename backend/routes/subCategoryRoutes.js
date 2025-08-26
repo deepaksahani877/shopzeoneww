@@ -13,11 +13,7 @@ router.get('/', subCategoryController.getSubCategories);
 router.get('/:id', subCategoryController.getSubCategory);
 
 // Create new sub category
-// router.post('/', subCategoryController.createSubCategory);
-// router.post('/',(req,res)=>{
-//   console.log(" test 3");
-//   res.send(" test 3");
-// });
+router.post('/', subCategoryController.createSubCategory);
 
 
 // Update sub category

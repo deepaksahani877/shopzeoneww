@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,15 +122,19 @@ const Products: React.FC = () => {
 
   // Monitor csvFile state changes
   useEffect(() => {
-    console.log('🔄 csvFile state changed:', csvFile ? `${csvFile.name} (${csvFile.size} bytes)` : 'No file');
+    // File state monitoring removed for cleaner code
   }, [csvFile]);
+
+  // Monitor products state changes for debugging
+  useEffect(() => {
+    // Debug logging removed for cleaner code
+  }, [products]);
 
   const fetchCategories = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/categories');
       if (response.ok) {
         const data = await response.json();
-        console.log('Categories response:', data);
         setCategories(data.data?.categories || []);
       } else {
         throw new Error(`Failed to fetch categories: ${response.status}`);
@@ -146,7 +150,6 @@ const Products: React.FC = () => {
       const response = await fetch('http://localhost:5000/api/subcategories');
       if (response.ok) {
         const data = await response.json();
-        console.log('Subcategories response:', data);
         setSubCategories(data.data?.subCategories || []);
       } else {
         throw new Error(`Failed to fetch subcategories: ${response.status}`);
@@ -162,24 +165,24 @@ const Products: React.FC = () => {
       const response = await fetch('http://localhost:5000/api/stores');
       if (response.ok) {
         const data = await response.json();
-        console.log('Stores response:', data);
         setStores(data.data?.stores || []);
       } else {
         throw new Error(`Failed to fetch stores: ${response.status}`);
       }
     } catch (error) {
-              console.error('Error fetching stores:', error);
-        setError('Failed to load stores');
-      }
-    };
+      console.error('Error fetching stores:', error);
+      setError('Failed to load stores');
+    }
+  };
 
   const fetchProducts = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/products');
       if (response.ok) {
         const data = await response.json();
-        console.log('Products response:', data);
-        setProducts(data.products || []);
+        // Handle different response structures
+        const productsData = data.products || data.data?.products || data || [];
+        setProducts(productsData);
       } else {
         throw new Error(`Failed to fetch products: ${response.status}`);
       }
@@ -234,13 +237,8 @@ const Products: React.FC = () => {
 
   const handleSaveProduct = async (productData: Product) => {
     try {
-      console.log('=== SAVING PRODUCT ===');
-      console.log('Product data to save:', productData);
-      console.log('Is editing:', !!editingProduct);
-      
       if (editingProduct) {
         // Update existing product
-        console.log('Updating product with ID:', editingProduct.id);
         const response = await fetch(`http://localhost:5000/api/products/${editingProduct.id}`, {
           method: 'PUT',
           headers: {
@@ -249,15 +247,13 @@ const Products: React.FC = () => {
           body: JSON.stringify(productData),
         });
         
-        console.log('Update response status:', response.status);
-        
         if (response.ok) {
           const updatedProduct = await response.json();
-          console.log('Update response:', updatedProduct);
           
-          setProducts(products.map(p => 
-            p.id === editingProduct.id ? updatedProduct.product : p
-          ));
+          // Update the products list with the updated product
+          setProducts(prevProducts => 
+            prevProducts.map(p => p.id === editingProduct.id ? updatedProduct.product : p)
+          );
           
           // Show success message
           const successMessage = document.createElement('div');
@@ -267,12 +263,10 @@ const Products: React.FC = () => {
           setTimeout(() => document.body.removeChild(successMessage), 3000);
         } else {
           const errorData = await response.json();
-          console.error('Update failed:', errorData);
           throw new Error(errorData.message || 'Failed to update product');
         }
       } else {
         // Create new product
-        console.log('Creating new product');
         const response = await fetch('http://localhost:5000/api/products', {
           method: 'POST',
           headers: {
@@ -281,13 +275,34 @@ const Products: React.FC = () => {
           body: JSON.stringify(productData),
         });
         
-        console.log('Create response status:', response.status);
-        
         if (response.ok) {
-          const newProduct = await response.json();
-          console.log('Create response:', newProduct);
+          const result = await response.json();
           
-          setProducts([...products, newProduct.product]);
+          // Handle different response structures from backend
+          let newProduct;
+          if (result.product) {
+            newProduct = result.product;
+          } else if (result.data && result.data.product) {
+            newProduct = result.data.product;
+          } else if (result.id) {
+            // If backend returns just the product object directly
+            newProduct = result;
+          } else {
+            // Fallback: create a product object from the submitted data
+            newProduct = {
+              ...productData,
+              id: Date.now().toString(), // Temporary ID
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          }
+          
+          // Add the new product to the products list using functional update
+          setProducts(prevProducts => {
+            // Create a completely new array to ensure React detects the change
+            const updatedProducts = [...prevProducts, newProduct];
+            return updatedProducts;
+          });
           
           // Show success message
           const successMessage = document.createElement('div');
@@ -297,10 +312,11 @@ const Products: React.FC = () => {
           setTimeout(() => document.body.removeChild(successMessage), 3000);
         } else {
           const errorData = await response.json();
-          console.error('Create failed:', errorData);
           throw new Error(errorData.message || 'Failed to create product');
         }
       }
+      
+      // Close modal after successful save
       setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving product:', error);
@@ -415,7 +431,6 @@ const Products: React.FC = () => {
       return;
     }
     
-    console.log('Starting CSV upload with file:', csvFile.name, csvFile.size);
     setIsLoading(true);
     setUploadProgress(0);
     
@@ -423,18 +438,13 @@ const Products: React.FC = () => {
       const formData = new FormData();
       formData.append('csv', csvFile);
       
-      console.log('Sending request to:', 'http://localhost:5000/api/products/bulk-upload');
-      
       const response = await fetch('http://localhost:5000/api/products/bulk-upload', {
         method: 'POST',
         body: formData,
       });
       
-      console.log('Response status:', response.status);
-      
       if (response.ok) {
         const result = await response.json();
-        console.log('Upload result:', result);
         
         if (result.errors && result.errors.length > 0) {
           // Show detailed error messages
@@ -468,31 +478,21 @@ const Products: React.FC = () => {
   };
 
   const handleFileSelect = (file: File | null) => {
-    console.log('=== FILE SELECTION HANDLER ===');
-    console.log('Previous csvFile state:', csvFile);
-    console.log('New file to set:', file ? `${file.name} (${file.size} bytes)` : 'No file');
-    
     setCsvFile(file);
-    
-    // Force a re-render to see the state change
-    setTimeout(() => {
-      console.log('csvFile state after update:', csvFile);
-      console.log('Current csvFile state (from closure):', file);
-    }, 100);
-    
-    console.log('=== END FILE SELECTION HANDLER ===');
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesCategory = selectedCategory === '' || product.category_id === selectedCategory;
-    const matchesStore = selectedStore === '' || product.store_id === selectedStore;
-    
-    return matchesSearch && matchesCategory && matchesStore;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = selectedCategory === '' || product.category_id === selectedCategory;
+      const matchesStore = selectedStore === '' || product.store_id === selectedStore;
+      
+      return matchesSearch && matchesCategory && matchesStore;
+    });
+  }, [products, searchTerm, selectedCategory, selectedStore]);
 
   // Show loading state
   if (isDataLoading) {
@@ -836,7 +836,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
   useEffect(() => {
     if (!product) {
       // Creating new product - reset form
-      console.log('Creating new product - resetting form');
       setFormData({
         product_code: '',
         amazon_asin: '',
@@ -882,53 +881,25 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
   // Update form data when stores/categories change
   useEffect(() => {
-    console.log('useEffect triggered - stores/categories changed');
-    console.log('Current stores:', stores);
-    console.log('Current categories:', categories);
-    console.log('Current subCategories:', subCategories);
-    console.log('Current formData:', formData);
-    
-    // Remove automatic store selection - let user choose
-    // if (stores.length > 0 && (!formData.store_id || formData.store_id === '')) {
-    //   console.log('Setting store_id to first store:', stores[0].id);
-    //   setFormData(prev => ({ ...prev, store_id: stores[0].id }));
-    // }
-    
     if (categories.length > 0 && (!formData.category_id || formData.category_id === 0)) {
-      console.log('Setting category_id to first category:', categories[0].id);
       setFormData(prev => ({ ...prev, category_id: categories[0].id }));
     }
     if (subCategories.length > 0 && (!formData.sub_category_id || formData.sub_category_id === 0)) {
-      console.log('Setting sub_category_id to first subcategory:', subCategories[0].id);
       setFormData(prev => ({ ...prev, sub_category_id: subCategories[0].id }));
     }
   }, [stores, categories, subCategories]);
 
   useEffect(() => {
     if (product) {
-      console.log('=== EDITING PRODUCT ===');
-      console.log('Product to edit:', product);
-      console.log('Available categories:', categories);
-      console.log('Available subcategories:', subCategories);
-      console.log('Product category_id:', product.category_id);
-      console.log('Product sub_category_id:', product.sub_category_id);
-      
       // Ensure all required fields have valid values
       const updatedProduct = {
         ...product,
-        // Don't automatically set store_id - let user choose
-        // store_id: product.store_id || (stores.length > 0 ? stores[0].id : ''),
         store_id: product.store_id || '',
         category_id: product.category_id || (categories.length > 0 ? categories[0].id : 0),
         sub_category_id: product.sub_category_id || (subCategories.length > 0 ? subCategories[0].id : 0)
       };
       
       setFormData(updatedProduct);
-      
-      // Log the form data after setting
-      setTimeout(() => {
-        console.log('Form data after setting:', formData);
-      }, 100);
     }
   }, [product, stores, categories, subCategories]);
 
@@ -964,13 +935,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
   };
 
   const handleInputChange = (field: keyof Product, value: any) => {
-    console.log(`handleInputChange called: field=${field}, value=${value}, type=${typeof value}`);
-    setFormData(prev => {
-      const newData = { ...prev, [field]: value };
-      console.log(`Form data updated: ${field} = ${value}`);
-      console.log('New form data:', newData);
-      return newData;
-    });
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -1060,7 +1025,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
                       value={formData.category_id || ''}
                       onChange={(e) => {
                         const value = e.target.value;
-                        console.log('Category selection changed:', value);
                         handleInputChange('category_id', value ? Number(value) : 0);
                       }}
                       className="w-full p-2 border border-gray-300 rounded-md"
@@ -1096,7 +1060,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
                       value={formData.sub_category_id || ''}
                       onChange={(e) => {
                         const value = e.target.value;
-                        console.log('Subcategory selection changed:', value);
                         handleInputChange('sub_category_id', value ? Number(value) : 0);
                       }}
                       className="w-full p-2 border border-gray-300 rounded-md"
@@ -1156,7 +1119,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
                       value={formData.store_id || ''}
                       onChange={(e) => {
                         const value = e.target.value;
-                        console.log('Store selection changed:', value);
                         handleInputChange('store_id', value);
                       }}
                       className="w-full p-2 border border-gray-300 rounded-md"
@@ -1430,23 +1392,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
              </Tabs>
 
              <div className="flex justify-end space-x-3 pt-6 border-t">
-               <Button 
-                 type="button" 
-                 variant="outline" 
-                 onClick={() => {
-                   console.log('=== FORM DEBUG ===');
-                   console.log('Current formData:', formData);
-                   console.log('Available stores:', stores);
-                   console.log('Available categories:', categories);
-                   console.log('Available subcategories:', subCategories);
-                   console.log('Selected store_id:', formData.store_id);
-                   console.log('Selected category_id:', formData.category_id);
-                   console.log('Selected sub_category_id:', formData.sub_category_id);
-                   alert(`Form Debug:\nStore: ${formData.store_id} (${stores.find(s => s.id === formData.store_id)?.name || 'Not found'})\nCategory: ${formData.category_id} (${categories.find(c => c.id === formData.category_id)?.name || 'Not found'})\nSubcategory: ${formData.sub_category_id} (${subCategories.find(sc => sc.id === formData.sub_category_id)?.name || 'Not found'})\nCheck console for details`);
-                 }}
-               >
-                 Debug Form
-               </Button>
                <Button type="button" variant="outline" onClick={onClose}>
                  Cancel
                </Button>
@@ -1485,28 +1430,17 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
      const file = e.target.files?.[0];
-     console.log('File input change detected:', file);
      
      if (file) {
-       console.log('File details:', {
-         name: file.name,
-         size: file.size,
-         type: file.type,
-         lastModified: file.lastModified
-       });
-       
        if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-         console.log('Valid CSV file detected, calling onFileSelect');
          onFileSelect(file);
        } else {
-         console.log('Invalid file type, showing error');
          alert('Please select a valid CSV file (.csv extension)');
          onFileSelect(null);
          // Reset the file input
          e.target.value = '';
        }
      } else {
-       console.log('No file selected, clearing selection');
        onFileSelect(null);
      }
    };
@@ -1514,7 +1448,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
    const resetFileInput = () => {
      if (fileInputRef.current) {
        fileInputRef.current.value = '';
-       console.log('File input reset via ref');
      }
    };
 
@@ -1600,40 +1533,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
                  Download Template
                </Button>
                <div className="flex space-x-3">
-                 <Button 
-                   variant="outline" 
-                   onClick={() => {
-                     console.log('=== DEBUG BUTTON CLICKED ===');
-                     console.log('Current csvFile state:', csvFile);
-                     console.log('Current isLoading state:', isLoading);
-                     console.log('File input element:', document.getElementById('csv-file'));
-                     alert(`File: ${csvFile ? csvFile.name : 'None'}\nSize: ${csvFile ? csvFile.size : 'N/A'} bytes\nLoading: ${isLoading}`);
-                   }}
-                 >
-                   Debug
-                 </Button>
-                 <Button 
-                   variant="outline" 
-                   onClick={() => {
-                     console.log('=== TEST FILE SELECTION ===');
-                     // Create a test file object
-                     const testFile = new File(['test content'], 'test.csv', { type: 'text/csv' });
-                     console.log('Test file created:', testFile);
-                     onFileSelect(testFile);
-                   }}
-                 >
-                   Test File
-                 </Button>
-                 <Button 
-                   variant="outline" 
-                   onClick={() => {
-                     console.log('=== RESET FILE SELECTION ===');
-                     onFileSelect(null);
-                     resetFileInput();
-                   }}
-                 >
-                   Reset
-                 </Button>
                  <Button variant="outline" onClick={onClose}>
                    Cancel
                  </Button>

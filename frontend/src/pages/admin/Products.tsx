@@ -18,6 +18,7 @@ import {
   Package
 } from 'lucide-react';
 import { generateCSVTemplate } from '@/utils/csvTemplate';
+import { useToast } from '@/components/ui/toast';
 
 interface Product {
   id?: string;
@@ -80,6 +81,7 @@ interface Store {
 }
 
 const Products: React.FC = () => {
+  const { addToast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
@@ -94,13 +96,12 @@ const Products: React.FC = () => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Fetch data from backend API
   useEffect(() => {
     const loadAllData = async () => {
       setIsDataLoading(true);
-      setError(null);
       
       try {
         await Promise.all([
@@ -111,7 +112,12 @@ const Products: React.FC = () => {
         ]);
       } catch (error) {
         console.error('Error loading data:', error);
-        setError('Failed to load data. Please refresh the page.');
+        addToast({
+          type: "error",
+          title: "Error Loading Data",
+          message: "Failed to load data. Please refresh the page.",
+          duration: 5000,
+        });
       } finally {
         setIsDataLoading(false);
       }
@@ -125,10 +131,9 @@ const Products: React.FC = () => {
     // File state monitoring removed for cleaner code
   }, [csvFile]);
 
-  // Monitor products state changes for debugging
-  useEffect(() => {
-    // Debug logging removed for cleaner code
-  }, [products]);
+
+
+
 
   const fetchCategories = async () => {
     try {
@@ -141,7 +146,12 @@ const Products: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      setError('Failed to load categories');
+              addToast({
+          type: "error",
+          title: "Error",
+          message: "Failed to load categories",
+          duration: 5000,
+        });
     }
   };
 
@@ -156,7 +166,12 @@ const Products: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching subcategories:', error);
-      setError('Failed to load subcategories');
+      addToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to load subcategories",
+        duration: 5000,
+      });
     }
   };
 
@@ -171,7 +186,12 @@ const Products: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching stores:', error);
-      setError('Failed to load stores');
+      addToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to load stores",
+        duration: 5000,
+      });
     }
   };
 
@@ -188,7 +208,12 @@ const Products: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      setError('Failed to load products');
+      addToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to load products",
+        duration: 5000,
+      });
     }
   };
 
@@ -212,12 +237,16 @@ const Products: React.FC = () => {
         if (response.ok) {
           setProducts(products.filter(p => p.id !== id));
           
-          // Show success message
-          const successMessage = document.createElement('div');
-          successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-          successMessage.textContent = 'Product deleted successfully!';
-          document.body.appendChild(successMessage);
-          setTimeout(() => document.body.removeChild(successMessage), 3000);
+          // Also refresh the products list to ensure we have the latest data
+          await fetchProducts();
+          
+          // Show success toast
+          addToast({
+            type: "success",
+            title: "Success!",
+            message: "Product deleted successfully!",
+            duration: 3000,
+          });
         } else {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to delete product');
@@ -225,17 +254,19 @@ const Products: React.FC = () => {
       } catch (error) {
         console.error('Error deleting product:', error);
         
-        // Show error message
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-        errorMessage.textContent = `Error: ${error instanceof Error ? error.message : 'Failed to delete product'}`;
-        document.body.appendChild(errorMessage);
-        setTimeout(() => document.body.removeChild(errorMessage), 5000);
+        // Show error toast
+        addToast({
+          type: "error",
+          title: "Error",
+          message: error instanceof Error ? error.message : 'Failed to delete product',
+          duration: 5000,
+        });
       }
     }
   };
 
   const handleSaveProduct = async (productData: Product) => {
+    setIsUpdating(true);
     try {
       if (editingProduct) {
         // Update existing product
@@ -251,16 +282,21 @@ const Products: React.FC = () => {
           const updatedProduct = await response.json();
           
           // Update the products list with the updated product
-          setProducts(prevProducts => 
-            prevProducts.map(p => p.id === editingProduct.id ? updatedProduct.product : p)
-          );
+          setProducts(prevProducts => {
+            const updated = prevProducts.map(p => p.id === editingProduct.id ? updatedProduct.product : p);
+            return updated;
+          });
           
-          // Show success message
-          const successMessage = document.createElement('div');
-          successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-          successMessage.textContent = 'Product updated successfully!';
-          document.body.appendChild(successMessage);
-          setTimeout(() => document.body.removeChild(successMessage), 3000);
+          // Also refresh the products list to ensure we have the latest data
+          await fetchProducts();
+          
+          // Show success toast
+          addToast({
+            type: "success",
+            title: "Success!",
+            message: "Product updated successfully!",
+            duration: 3000,
+          });
         } else {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to update product');
@@ -304,12 +340,16 @@ const Products: React.FC = () => {
             return updatedProducts;
           });
           
-          // Show success message
-          const successMessage = document.createElement('div');
-          successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-          successMessage.textContent = 'Product created successfully!';
-          document.body.appendChild(successMessage);
-          setTimeout(() => document.body.removeChild(successMessage), 3000);
+          // Also refresh the products list to ensure we have the latest data
+          await fetchProducts();
+          
+          // Show success toast
+          addToast({
+            type: "success",
+            title: "Success!",
+            message: "Product created successfully!",
+            duration: 3000,
+          });
         } else {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to create product');
@@ -321,12 +361,15 @@ const Products: React.FC = () => {
     } catch (error) {
       console.error('Error saving product:', error);
       
-      // Show error message
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-      errorMessage.textContent = `Error: ${error instanceof Error ? error.message : 'Failed to save product'}`;
-      document.body.appendChild(errorMessage);
-      setTimeout(() => document.body.removeChild(errorMessage), 5000);
+      // Show error toast
+      addToast({
+        type: "error",
+        title: "Error",
+        message: error instanceof Error ? error.message : 'Failed to save product',
+        duration: 5000,
+      });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -449,13 +492,23 @@ const Products: React.FC = () => {
         if (result.errors && result.errors.length > 0) {
           // Show detailed error messages
           const errorMessage = `CSV Upload completed with ${result.errorCount} errors:\n\n${result.errors.slice(0, 10).join('\n')}${result.errors.length > 10 ? '\n\n... and ' + (result.errors.length - 10) + ' more errors' : ''}`;
-          alert(errorMessage);
+          addToast({
+            type: "error",
+            title: "CSV Upload Completed with Errors",
+            message: errorMessage,
+            duration: 10000,
+          });
         } else {
-          alert(`Successfully uploaded ${result.uploaded} products!`);
+          addToast({
+            type: "success",
+            title: "Bulk Upload Success!",
+            message: `Successfully uploaded ${result.uploaded} products!`,
+            duration: 5000,
+          });
         }
         
         // Refresh the products list
-        fetchProducts();
+        await fetchProducts();
         
         setIsUploadModalOpen(false);
         setCsvFile(null);
@@ -467,7 +520,12 @@ const Products: React.FC = () => {
     } catch (error) {
       console.error('Error uploading CSV:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(`Error uploading CSV: ${errorMessage}`);
+      addToast({
+        type: "error",
+        title: "CSV Upload Error",
+        message: `Error uploading CSV: ${errorMessage}`,
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -482,7 +540,7 @@ const Products: React.FC = () => {
   };
 
   const filteredProducts = useMemo(() => {
-    return products.filter(product => {
+    const filtered = products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.sku_id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -492,6 +550,7 @@ const Products: React.FC = () => {
       
       return matchesSearch && matchesCategory && matchesStore;
     });
+    return filtered;
   }, [products, searchTerm, selectedCategory, selectedStore]);
 
   // Show loading state
@@ -506,25 +565,7 @@ const Products: React.FC = () => {
     );
   }
 
-  // Show error state
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <div className="text-red-600 mb-4">
-            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Data</h3>
-          <p className="text-red-700 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Refresh Page
-          </Button>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="p-6 space-y-6">
@@ -535,11 +576,22 @@ const Products: React.FC = () => {
           <p className="text-gray-600">Manage your product catalog and inventory</p>
         </div>
         <div className="flex gap-3">
+          {isUpdating && (
+            <div className="flex items-center text-blue-600 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+              Updating...
+            </div>
+          )}
           <Button 
-            onClick={() => {
+            onClick={async () => {
               setIsDataLoading(true);
-              fetchProducts();
-              setIsDataLoading(false);
+              try {
+                await fetchProducts();
+              } catch (error) {
+                console.error('Error refreshing products:', error);
+              } finally {
+                setIsDataLoading(false);
+              }
             }} 
             variant="outline"
             disabled={isDataLoading}
@@ -623,6 +675,7 @@ const Products: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle>Products ({filteredProducts.length})</CardTitle>
+          
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -767,11 +820,11 @@ const Products: React.FC = () => {
           csvFile={csvFile}
           onFileSelect={handleFileSelect}
           onDownloadTemplate={handleDownloadTemplate}
-        />
-      )}
-    </div>
-  );
-};
+                 />
+       )}
+     </div>
+   );
+ };
 
 // Product Modal Component
 interface ProductModalProps {
